@@ -40,27 +40,28 @@
       </div>
     </header>
 
-    <canvas id="game" width="800" height="600"></canvas>
+    <div class="prompt-bar"><div id="prompt" class="prompt">スペース / タップで開始</div></div>
 
-    <footer class="controls">
-      <div id="prompt" class="prompt">スペース / タップで開始</div>
+    <div id="stage" class="stage">
+      <canvas id="game" width="800" height="600"></canvas>
 
-      <div class="touch-controls">
-        <div class="pitch-buttons" id="pitch-buttons">
-          <button class="pbtn" data-pitch="1">ストレート</button>
-          <button class="pbtn" data-pitch="2">カーブ</button>
-          <button class="pbtn" data-pitch="3">スライダー</button>
-          <button class="pbtn" data-pitch="4">フォーク</button>
-        </div>
-        <button id="action-btn" class="action-btn">開始</button>
+      <!-- 投球時のみ表示：球種選択（左上に縦並び） -->
+      <div class="pitch-buttons" id="pitch-buttons">
+        <button class="pbtn" data-pitch="1">ストレート</button>
+        <button class="pbtn" data-pitch="2">カーブ</button>
+        <button class="pbtn" data-pitch="3">スライダー</button>
+        <button class="pbtn" data-pitch="4">フォーク</button>
       </div>
 
-      <div class="keyhint">
-        <span>画面をなぞる / ← → ↑ ↓ : カーソル移動</span>
-        <span>球種ボタン / 1〜4 : 球種選択（投球時）</span>
-        <span>大ボタン / スペース : 投球・スイング</span>
-      </div>
-    </footer>
+      <!-- 投球 / スイング / 開始 などの主アクション（右下） -->
+      <button id="action-btn" class="action-btn">開始</button>
+    </div>
+
+    <div class="keyhint">
+      <span>画面をなぞる / ← → ↑ ↓ : カーソル移動</span>
+      <span>球種ボタン / 1〜4 : 球種選択</span>
+      <span>大ボタン / スペース : 投球・スイング</span>
+    </div>
   </div>
   <script src="game.js"></script>
 </body>

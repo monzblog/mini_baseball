@@ -10,24 +10,52 @@
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const W = canvas.width;
-const H = canvas.height;
 
 /* ----------------------------- 設定値 ---------------------------------- */
 const INNINGS = 3;            // 試合のイニング数
-const FPS = 60;
-
-// ストライクゾーン（打席アップ視点での描画矩形）
-const ZONE = { w: 170, h: 210, cx: W / 2, cy: 312 };
-ZONE.x = ZONE.cx - ZONE.w / 2;
-ZONE.y = ZONE.cy - ZONE.h / 2;
-
-const RELEASE = { x: W / 2, y: 150 }; // 投手のリリースポイント（画面上、遠く）
 
 // 打撃のタイミング
 const MEET_P = 0.82;     // 最適スイング進行度
 const TIMING_TOL = 0.24; // 許容タイミング誤差
-const MEET_RADIUS = 70;  // ミート判定半径（カーソルとボールの許容距離）
+
+/* ----------------- 画面サイズ・レイアウト（端末に追従） ---------------- */
+// W, H は論理サイズ。resize() で実際の表示領域に合わせて更新する。
+let W = 800, H = 600;
+let MEET_RADIUS = 70;   // ミート判定半径（カーソル↔ボール）
+let LScale = 1;         // 800x600基準に対する描画スケール
+
+// ストライクゾーン / リリースポイント（computeLayout で再計算）
+const ZONE = { w: 170, h: 210, cx: 400, cy: 300, x: 315, y: 195 };
+const RELEASE = { x: 400, y: 110 };
+
+function computeLayout() {
+  // 端末の縦横どちらでもゾーンが大きく収まるように
+  ZONE.w = Math.min(W * 0.44, H * 0.34);
+  ZONE.h = ZONE.w * 1.22;
+  ZONE.cx = W / 2;
+  ZONE.cy = H * 0.45;
+  ZONE.x = ZONE.cx - ZONE.w / 2;
+  ZONE.y = ZONE.cy - ZONE.h / 2;
+  RELEASE.x = W / 2;
+  RELEASE.y = H * 0.16;
+  LScale = ZONE.w / 170;          // 元デザイン(幅170)比
+  MEET_RADIUS = 70 * LScale;
+}
+
+function resize() {
+  const host = document.getElementById("stage") || canvas.parentElement || canvas;
+  W = Math.max(300, Math.floor(host.clientWidth));
+  H = Math.max(360, Math.floor(host.clientHeight));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.floor(W * dpr);
+  canvas.height = Math.floor(H * dpr);
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // 以降は論理座標(W,H)で描画
+  computeLayout();
+}
+window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", () => setTimeout(resize, 100));
 
 /* --------------------------- 球種データ -------------------------------- */
 // breakX/breakY: 本塁到達時点での最終変化量（px）
@@ -120,7 +148,7 @@ function canvasPos(clientX, clientY) {
 function moveCursorTo(clientX, clientY) {
   const pos = canvasPos(clientX, clientY);
   cursor.x = pos.x;
-  cursor.y = pos.y - 30;
+  cursor.y = pos.y - 34 * LScale; // 指の少し上にカーソルを出して見やすく
   clampCursor();
 }
 
@@ -133,6 +161,7 @@ canvas.addEventListener("pointerdown", (e) => {
     return;
   }
   pointerDragging = true;
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
   moveCursorTo(e.clientX, e.clientY);
 });
 canvas.addEventListener("pointermove", (e) => {
@@ -140,8 +169,8 @@ canvas.addEventListener("pointermove", (e) => {
   e.preventDefault();
   moveCursorTo(e.clientX, e.clientY);
 });
-window.addEventListener("pointerup", () => { pointerDragging = false; });
-window.addEventListener("pointercancel", () => { pointerDragging = false; });
+canvas.addEventListener("pointerup", () => { pointerDragging = false; });
+canvas.addEventListener("pointercancel", () => { pointerDragging = false; });
 
 // 画面上のボタン
 const actionBtn = document.getElementById("action-btn");
@@ -296,9 +325,9 @@ function firePitch() {
   swing.done = false;
   swing.p = 0;
 
-  // 本塁到達時の最終位置（狙い + 変化量）
-  pitch.plate.x = pitch.target.x + def.breakX;
-  pitch.plate.y = pitch.target.y + def.breakY;
+  // 本塁到達時の最終位置（狙い + 変化量）※変化量は画面サイズに合わせて拡縮
+  pitch.plate.x = pitch.target.x + def.breakX * LScale;
+  pitch.plate.y = pitch.target.y + def.breakY * LScale;
   pitch.isStrike = inZone(pitch.plate.x, pitch.plate.y);
 
   game.phase = "pitch";
@@ -753,19 +782,22 @@ function drawAtBatView() {
   // 遠近の土（投手前）
   ctx.fillStyle = "rgba(201,138,75,0.55)";
   ctx.beginPath();
-  ctx.ellipse(W / 2, 170, 120, 34, 0, 0, Math.PI * 2);
+  ctx.ellipse(W / 2, RELEASE.y + 20 * LScale, W * 0.18, H * 0.06, 0, 0, Math.PI * 2);
   ctx.fill();
 
   // 本塁付近の土（手前の扇形）
   ctx.fillStyle = "#b9793f";
   ctx.beginPath();
-  ctx.moveTo(W / 2 - 260, H);
-  ctx.quadraticCurveTo(W / 2, H - 180, W / 2 + 260, H);
+  ctx.moveTo(W / 2 - W * 0.42, H);
+  ctx.quadraticCurveTo(W / 2, H - H * 0.30, W / 2 + W * 0.42, H);
   ctx.closePath();
   ctx.fill();
 
+  // 遠景の守備陣（外野・内野のシルエット）
+  drawDistantFielders();
+
   // 投手シルエット
-  drawPitcher(W / 2, 150);
+  drawPitcher(RELEASE.x, RELEASE.y);
 
   // ストライクゾーン（3x3 グリッド）
   drawStrikeZone();
@@ -783,8 +815,8 @@ function drawAtBatView() {
   // カーソル（ミート or 狙い）
   drawCursor();
 
-  // 球種・狙いガイド（プレイヤー投球の選択中）
-  if (game.phase === "pitch_select" && playerPitching()) {
+  // 球種・狙いガイド（プレイヤー投球の選択中）※広い画面のみ（狭い画面は画面ボタンで操作）
+  if (game.phase === "pitch_select" && playerPitching() && W > 560) {
     drawPitchSelectUI();
   }
 
@@ -810,12 +842,13 @@ function drawStrikeZone() {
   // 本塁ベース
   ctx.fillStyle = "rgba(255,255,255,0.9)";
   ctx.beginPath();
-  const by = ZONE.y + ZONE.h + 26;
-  ctx.moveTo(ZONE.cx - 34, by);
-  ctx.lineTo(ZONE.cx + 34, by);
-  ctx.lineTo(ZONE.cx + 28, by + 16);
-  ctx.lineTo(ZONE.cx, by + 26);
-  ctx.lineTo(ZONE.cx - 28, by + 16);
+  const by = ZONE.y + ZONE.h + 26 * LScale;
+  const s = LScale;
+  ctx.moveTo(ZONE.cx - 34 * s, by);
+  ctx.lineTo(ZONE.cx + 34 * s, by);
+  ctx.lineTo(ZONE.cx + 28 * s, by + 16 * s);
+  ctx.lineTo(ZONE.cx, by + 26 * s);
+  ctx.lineTo(ZONE.cx - 28 * s, by + 16 * s);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
@@ -828,9 +861,9 @@ function drawPitchedBall() {
   const brk = def.shape(p);
   const baseX = lerp(RELEASE.x, pitch.target.x, easeIn(p));
   const baseY = lerp(RELEASE.y, pitch.target.y, easeIn(p));
-  const x = baseX + def.breakX * brk;
-  const y = baseY + def.breakY * brk;
-  const r = lerp(5, 15, p);
+  const x = baseX + def.breakX * LScale * brk;
+  const y = baseY + def.breakY * LScale * brk;
+  const r = lerp(5, 15, p) * LScale;
 
   // 影/軌跡
   ctx.save();
@@ -857,27 +890,29 @@ function drawCursor() {
   // CPU 打席のときはミートカーソルを表示しない（プレイヤー投球の狙いを表示）
   let x = cursor.x, y = cursor.y;
 
+  const s = LScale;
   if (isMeet) {
     // ミートカーソル（青リング）
+    const R = 36 * s;
     ctx.save();
     ctx.strokeStyle = swing.done ? "#ff5d5d" : "#54b0ff";
     ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(x, y, 36, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.stroke();
     ctx.strokeStyle = "rgba(255,255,255,0.6)";
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x - 44, y); ctx.lineTo(x - 30, y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x + 30, y); ctx.lineTo(x + 44, y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, y - 44); ctx.lineTo(x, y - 30); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, y + 30); ctx.lineTo(x, y + 44); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - R - 8 * s, y); ctx.lineTo(x - R + 6 * s, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + R - 6 * s, y); ctx.lineTo(x + R + 8 * s, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y - R - 8 * s); ctx.lineTo(x, y - R + 6 * s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y + R - 6 * s); ctx.lineTo(x, y + R + 8 * s); ctx.stroke();
     ctx.restore();
   } else if (playerPitching()) {
     // 投球の狙い（黄色い十字）
     ctx.save();
     ctx.strokeStyle = "#ffd23f";
     ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(x - 16, y); ctx.lineTo(x + 16, y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x, y + 16); ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 16 * s, y); ctx.lineTo(x + 16 * s, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y - 16 * s); ctx.lineTo(x, y + 16 * s); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, 8 * s, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
   }
 }
@@ -903,74 +938,120 @@ function drawPitchSelectUI() {
 }
 
 /* --------------------------- キャラクター描画 -------------------------- */
+// 守備側チームの色（表＝自分が守備=赤 / 裏＝CPUが守備=灰）
+function defenseColor() { return playerPitching() ? "#d23b3b" : "#cfd3d8"; }
+function defenseCap()   { return playerPitching() ? "#a52121" : "#9aa0a8"; }
+
 function drawPitcher(x, y) {
+  const s = LScale;
   ctx.save();
   // 体
   ctx.fillStyle = "#3a4a8a";
-  ctx.beginPath(); ctx.ellipse(x, y + 14, 16, 22, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x, y + 14 * s, 16 * s, 22 * s, 0, 0, Math.PI * 2); ctx.fill();
   // 頭
   ctx.fillStyle = "#ffd9b3";
-  ctx.beginPath(); ctx.arc(x, y - 14, 12, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y - 14 * s, 12 * s, 0, Math.PI * 2); ctx.fill();
   // 帽子
   ctx.fillStyle = "#26337a";
-  ctx.beginPath(); ctx.arc(x, y - 16, 12, Math.PI, 0); ctx.fill();
-  ctx.fillRect(x - 12, y - 16, 18, 4);
+  ctx.beginPath(); ctx.arc(x, y - 16 * s, 12 * s, Math.PI, 0); ctx.fill();
+  ctx.fillRect(x - 12 * s, y - 16 * s, 18 * s, 4 * s);
   ctx.restore();
 }
 
 function drawCatcher() {
-  const x = ZONE.cx, y = H - 70;
+  const s = LScale;
+  const x = ZONE.cx, y = H * 0.86;
   ctx.save();
   ctx.fillStyle = "#1f3a5a";
-  ctx.beginPath(); ctx.ellipse(x, y + 30, 46, 40, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x, y + 30 * s, 46 * s, 40 * s, 0, 0, Math.PI * 2); ctx.fill();
   // ミット
   ctx.fillStyle = "#7a4a22";
-  ctx.beginPath(); ctx.arc(x, y - 6, 18, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y - 6 * s, 18 * s, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#5e3618";
-  ctx.beginPath(); ctx.arc(x, y - 6, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y - 6 * s, 11 * s, 0, Math.PI * 2); ctx.fill();
   // ヘルメット
   ctx.fillStyle = "#2a4f78";
-  ctx.beginPath(); ctx.arc(x, y + 14, 16, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y + 14 * s, 16 * s, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
 function drawBatter(isPlayer) {
+  const s = LScale;
   // 右打者：本塁の左側に立つ
-  const x = ZONE.cx - 120;
-  const y = H - 150;
+  const x = ZONE.cx - W * 0.17;
+  const y = H * 0.74;
   ctx.save();
   // 体
   ctx.fillStyle = isPlayer ? "#d23b3b" : "#cccccc";
-  ctx.beginPath(); ctx.ellipse(x, y + 30, 18, 30, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x, y + 30 * s, 18 * s, 30 * s, 0, 0, Math.PI * 2); ctx.fill();
   // 頭
   ctx.fillStyle = "#ffd9b3";
-  ctx.beginPath(); ctx.arc(x, y - 4, 13, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y - 4 * s, 13 * s, 0, Math.PI * 2); ctx.fill();
   // ヘルメット
   ctx.fillStyle = isPlayer ? "#a52121" : "#888";
-  ctx.beginPath(); ctx.arc(x, y - 6, 14, Math.PI, 0); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y - 6 * s, 14 * s, Math.PI, 0); ctx.fill();
 
   // バット（スイング中は振る）
   const swinging = (game.phase === "pitch" || game.phase === "atbat_result") && swing.done;
   ctx.strokeStyle = "#c8a24a";
-  ctx.lineWidth = 6;
+  ctx.lineWidth = 6 * s;
   ctx.lineCap = "round";
   ctx.beginPath();
   if (swinging) {
-    ctx.moveTo(x + 4, y + 8);
-    ctx.lineTo(x + 70, y - 8);
+    ctx.moveTo(x + 4 * s, y + 8 * s);
+    ctx.lineTo(x + 70 * s, y - 8 * s);
   } else {
-    ctx.moveTo(x - 6, y + 6);
-    ctx.lineTo(x + 8, y - 44);
+    ctx.moveTo(x - 6 * s, y + 6 * s);
+    ctx.lineTo(x + 8 * s, y - 44 * s);
   }
   ctx.stroke();
   ctx.restore();
 }
 
+// 打席アップ視点の遠景に守備陣（内野手・外野手）を小さく配置
+function drawDistantFielders() {
+  const s = LScale;
+  const col = defenseColor(), cap = defenseCap();
+  // 画面上の概略位置（x: 中央比, y: 高さ比, size倍率）
+  const spots = [
+    { x: 0.18, y: 0.30, k: 0.7 }, // 左翼
+    { x: 0.82, y: 0.30, k: 0.7 }, // 右翼
+    { x: 0.50, y: 0.24, k: 0.7 }, // 中堅
+    { x: 0.30, y: 0.40, k: 0.85 }, // 遊撃
+    { x: 0.70, y: 0.40, k: 0.85 }, // 二塁
+    { x: 0.18, y: 0.46, k: 0.85 }, // 三塁
+    { x: 0.82, y: 0.46, k: 0.85 }, // 一塁
+  ];
+  for (const sp of spots) {
+    const fx = W * sp.x, fy = H * sp.y, k = sp.k * s;
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    // 影
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.beginPath(); ctx.ellipse(fx, fy + 12 * k, 10 * k, 4 * k, 0, 0, Math.PI * 2); ctx.fill();
+    // 体・頭・帽子
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.ellipse(fx, fy + 4 * k, 7 * k, 11 * k, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ffd9b3";
+    ctx.beginPath(); ctx.arc(fx, fy - 9 * k, 6 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = cap;
+    ctx.beginPath(); ctx.arc(fx, fy - 10 * k, 6 * k, Math.PI, 0); ctx.fill();
+    ctx.restore();
+  }
+}
+
 /* --------------------------- 描画：フィールドビュー -------------------- */
 function getFieldGeom() {
-  const home = { x: W / 2, y: H - 70 };
-  const fenceR = 440;
+  const home = { x: W / 2, y: H * 0.88 };
+  const fenceR = Math.min(W * 0.64, H * 0.74);
   return { home, fenceR };
+}
+
+// 扇形内の位置（aFrac: -1=三塁線..+1=一塁線, rFrac: 本塁からの距離比）
+function fieldPoint(field, aFrac, rFrac) {
+  const a = aFrac * (Math.PI / 4);
+  const r = field.fenceR * rFrac;
+  return { x: field.home.x + Math.sin(a) * r, y: field.home.y - Math.cos(a) * r };
 }
 
 function drawFieldView() {
@@ -994,7 +1075,7 @@ function drawFieldView() {
   ctx.fillStyle = "#c98a4b";
   ctx.beginPath();
   ctx.moveTo(home.x, home.y);
-  ctx.arc(home.x, home.y, 170, -Math.PI * 0.75, -Math.PI * 0.25);
+  ctx.arc(home.x, home.y, fenceR * 0.4, -Math.PI * 0.75, -Math.PI * 0.25);
   ctx.closePath();
   ctx.fill();
 
@@ -1033,22 +1114,26 @@ function drawFieldView() {
   drawBase(b2, game.bases[1]);
   drawBase(b3, game.bases[2]);
 
+  // 守備陣（9人）
+  drawFielders(field);
+
   // 打球
+  const ballR = Math.max(4, 6 * LScale);
   if (batted.active) {
     const t = batted.t / batted.dur;
     const x = lerp(batted.startX, batted.landX, t);
     const y = lerp(batted.startY, batted.landY, t);
-    const arc = Math.sin(t * Math.PI) * 60 * (0.4 + batted.power);
+    const arc = Math.sin(t * Math.PI) * fenceR * 0.14 * (0.4 + batted.power);
     // 影
     ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.beginPath(); ctx.ellipse(x, y, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, y, ballR, ballR * 0.5, 0, 0, Math.PI * 2); ctx.fill();
     // ボール
     ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(x, y - arc, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y - arc, ballR, 0, Math.PI * 2); ctx.fill();
   } else {
     // 着弾マーク
     ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.beginPath(); ctx.arc(batted.landX, batted.landY, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(batted.landX, batted.landY, ballR * 0.8, 0, Math.PI * 2); ctx.fill();
   }
 
   // 結果テキスト（着弾後のみ表示。飛球中は結果を伏せる）
@@ -1057,7 +1142,7 @@ function drawFieldView() {
 
 function basePos(n, field) {
   const { home, fenceR } = field;
-  const d = 150; // ダイヤモンド辺の長さ相当
+  const d = fenceR * 0.34; // ダイヤモンド辺の長さ相当
   if (n === 1) return { x: home.x + d * 0.78, y: home.y - d * 0.78 };
   if (n === 2) return { x: home.x, y: home.y - d * 1.1 };
   if (n === 3) return { x: home.x - d * 0.78, y: home.y - d * 0.78 };
@@ -1065,14 +1150,62 @@ function basePos(n, field) {
 }
 
 function drawBase(pos, on) {
+  const h = Math.max(7, 9 * LScale);
   ctx.save();
   ctx.translate(pos.x, pos.y);
   ctx.rotate(Math.PI / 4);
   ctx.fillStyle = on ? "#ffd23f" : "#ffffff";
   ctx.strokeStyle = "#444";
   ctx.lineWidth = 1.5;
-  ctx.fillRect(-9, -9, 18, 18);
-  ctx.strokeRect(-9, -9, 18, 18);
+  ctx.fillRect(-h, -h, h * 2, h * 2);
+  ctx.strokeRect(-h, -h, h * 2, h * 2);
+  ctx.restore();
+}
+
+// 俯瞰ビューの守備9人を配置・描画
+function drawFielders(field) {
+  const col = defenseColor(), cap = defenseCap();
+  // [角度比, 距離比, 表示名]
+  const spots = [
+    [0.00, 0.30, "投"],   // ピッチャー
+    [0.74, 0.52, "一"],   // ファースト
+    [0.30, 0.55, "二"],   // セカンド
+    [-0.30, 0.55, "遊"],  // ショート
+    [-0.74, 0.52, "三"],  // サード
+    [0.52, 0.84, "右"],   // ライト
+    [0.00, 0.92, "中"],   // センター
+    [-0.52, 0.84, "左"],  // レフト
+  ];
+  // 捕手（本塁の後ろ）
+  const catcher = { x: field.home.x, y: field.home.y + 16 * LScale, name: "捕" };
+  for (const [aF, rF, name] of spots) {
+    const p = fieldPoint(field, aF, rF);
+    drawFielderFigure(p.x, p.y, col, cap, name);
+  }
+  drawFielderFigure(catcher.x, catcher.y, col, cap, catcher.name);
+}
+
+function drawFielderFigure(x, y, col, cap, name) {
+  const k = Math.max(0.8, LScale);
+  ctx.save();
+  // 影
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.beginPath(); ctx.ellipse(x, y + 11 * k, 9 * k, 4 * k, 0, 0, Math.PI * 2); ctx.fill();
+  // 体
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.ellipse(x, y + 3 * k, 7 * k, 10 * k, 0, 0, Math.PI * 2); ctx.fill();
+  // 頭
+  ctx.fillStyle = "#ffd9b3";
+  ctx.beginPath(); ctx.arc(x, y - 9 * k, 6 * k, 0, Math.PI * 2); ctx.fill();
+  // 帽子
+  ctx.fillStyle = cap;
+  ctx.beginPath(); ctx.arc(x, y - 10 * k, 6 * k, Math.PI, 0); ctx.fill();
+  // ポジション名
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = `bold ${Math.round(10 * k)}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillText(name, x, y + 26 * k);
+  ctx.textAlign = "left";
   ctx.restore();
 }
 
@@ -1083,29 +1216,32 @@ function drawTitle() {
   g.addColorStop(1, "#2e8b3d");
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
+  const u = Math.min(W, H) / 480; // UIスケール
   ctx.textAlign = "center";
   ctx.fillStyle = "#ffd23f";
-  ctx.font = "bold 56px sans-serif";
-  ctx.fillText("⚾ ミニ野球", W / 2, 200);
+  ctx.font = `bold ${Math.round(46 * u)}px sans-serif`;
+  ctx.fillText("⚾ ミニ野球", W / 2, H * 0.22);
   ctx.fillStyle = "#fff";
-  ctx.font = "22px sans-serif";
-  ctx.fillText("パワプロ風ベースボール", W / 2, 250);
+  ctx.font = `${Math.round(19 * u)}px sans-serif`;
+  ctx.fillText("パワプロ風ベースボール", W / 2, H * 0.29);
 
-  ctx.font = "16px sans-serif";
+  const fs = Math.round(13 * u);
+  ctx.font = `${fs}px sans-serif`;
   ctx.fillStyle = "#cfe0f0";
   const lines = [
     `${INNINGS}イニング制 — あなたはホームチーム`,
-    "表＝あなたの投球（守備） / 裏＝あなたの打撃（攻撃）",
+    "表＝あなたの投球（守備）",
+    "裏＝あなたの打撃（攻撃）",
     "",
-    "【投球】球種ボタン/1〜4、画面なぞりで狙い、大ボタンで投球",
-    "【打撃】画面なぞりでミート、大ボタン/スペースでスイング",
+    "【投球】球種ボタン/1〜4 → 画面なぞりで狙う → 投球ボタン",
+    "【打撃】画面なぞりでミート → スイングボタン",
   ];
-  let y = 330;
-  for (const l of lines) { ctx.fillText(l, W / 2, y); y += 30; }
+  let y = H * 0.42;
+  for (const l of lines) { ctx.fillText(l, W / 2, y); y += fs * 1.7; }
 
   ctx.fillStyle = "#ffd23f";
-  ctx.font = "bold 24px sans-serif";
-  ctx.fillText("▶ スペース / タップで開始 ◀", W / 2, 520);
+  ctx.font = `bold ${Math.round(20 * u)}px sans-serif`;
+  ctx.fillText("▶ スペース / タップで開始 ◀", W / 2, H * 0.88);
   ctx.textAlign = "left";
 }
 
@@ -1120,28 +1256,36 @@ function drawGameOver() {
   drawFieldView();
   ctx.fillStyle = "rgba(0,0,0,0.65)";
   ctx.fillRect(0, 0, W, H);
+  const u = Math.min(W, H) / 480;
   ctx.textAlign = "center";
   ctx.fillStyle = "#ffd23f";
-  ctx.font = "bold 40px sans-serif";
-  ctx.fillText("試合終了", W / 2, H / 2 - 60);
+  ctx.font = `bold ${Math.round(34 * u)}px sans-serif`;
+  ctx.fillText("試合終了", W / 2, H / 2 - 60 * u);
   ctx.fillStyle = "#fff";
-  ctx.font = "22px sans-serif";
-  ctx.fillText(`${game.awayTotal} - ${game.homeTotal}`, W / 2, H / 2 - 10);
-  ctx.font = "18px sans-serif";
-  ctx.fillText(game.msg, W / 2, H / 2 + 40);
+  ctx.font = `${Math.round(20 * u)}px sans-serif`;
+  ctx.fillText(`${game.awayTotal} - ${game.homeTotal}`, W / 2, H / 2 - 14 * u);
+  ctx.font = `${Math.round(15 * u)}px sans-serif`;
+  ctx.fillText(game.msg, W / 2, H / 2 + 30 * u);
   ctx.textAlign = "left";
 }
 
 function drawBigText(text) {
   if (!text) return;
+  const u = Math.min(W, H) / 480;
+  // 長文は折り返さず収まるよう自動縮小
+  let size = 30 * u;
   ctx.save();
   ctx.textAlign = "center";
-  ctx.font = "bold 34px sans-serif";
-  ctx.lineWidth = 6;
+  ctx.font = `bold ${Math.round(size)}px sans-serif`;
+  while (ctx.measureText(text).width > W * 0.92 && size > 10) {
+    size -= 1;
+    ctx.font = `bold ${Math.round(size)}px sans-serif`;
+  }
+  ctx.lineWidth = Math.max(3, 5 * u);
   ctx.strokeStyle = "rgba(0,0,0,0.7)";
-  ctx.strokeText(text, W / 2, H / 2 - 30);
+  ctx.strokeText(text, W / 2, H * 0.4);
   ctx.fillStyle = "#ffd23f";
-  ctx.fillText(text, W / 2, H / 2 - 30);
+  ctx.fillText(text, W / 2, H * 0.4);
   ctx.restore();
   ctx.textAlign = "left";
 }
@@ -1296,5 +1440,6 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
+resize();
 updateHUD();
 loop();
