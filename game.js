@@ -64,7 +64,7 @@ const game = {
   score: { away: [], home: [] },  // イニングごとの得点
   awayTotal: 0,
   homeTotal: 0,
-  msg: "スペースキーで開始",
+  msg: "スペース / タップで開始",
 };
 
 function playerBatting() { return game.half === 1; }   // 裏はプレイヤー攻撃
@@ -102,6 +102,59 @@ window.addEventListener("keydown", (e) => {
   keys[e.key] = true;
 });
 window.addEventListener("keyup", (e) => { keys[e.key] = false; });
+
+/* --------------------------- タッチ/ポインタ操作 ----------------------- */
+// アクションボタン（スペース相当）＝ 投球 / スイング / 開始 / 次へ など
+function fireAction() { handleKey(" "); }
+
+// 画面（CSSピクセル）座標 → Canvas内部座標(800x600)へ変換
+function canvasPos(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - r.left) * (W / r.width),
+    y: (clientY - r.top) * (H / r.height),
+  };
+}
+
+// なぞった位置にカーソルを移動（指の少し上に表示して見やすく）
+function moveCursorTo(clientX, clientY) {
+  const pos = canvasPos(clientX, clientY);
+  cursor.x = pos.x;
+  cursor.y = pos.y - 30;
+  clampCursor();
+}
+
+let pointerDragging = false;
+canvas.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  // タイトル/交代/試合終了画面はタップで進行
+  if (["title", "change", "gameover"].includes(game.phase)) {
+    fireAction();
+    return;
+  }
+  pointerDragging = true;
+  moveCursorTo(e.clientX, e.clientY);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!pointerDragging) return; // ドラッグ中のみ（マウスのホバーでは動かさない）
+  e.preventDefault();
+  moveCursorTo(e.clientX, e.clientY);
+});
+window.addEventListener("pointerup", () => { pointerDragging = false; });
+window.addEventListener("pointercancel", () => { pointerDragging = false; });
+
+// 画面上のボタン
+const actionBtn = document.getElementById("action-btn");
+const pitchBtnWrap = document.getElementById("pitch-buttons");
+if (actionBtn) {
+  actionBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); fireAction(); });
+}
+if (pitchBtnWrap) {
+  pitchBtnWrap.addEventListener("pointerdown", (e) => {
+    const b = e.target.closest("[data-pitch]");
+    if (b) { e.preventDefault(); handleKey(b.dataset.pitch); updateHUD(); }
+  });
+}
 
 function handleKey(key) {
   const k = key === "Space" ? " " : key;
@@ -1044,15 +1097,15 @@ function drawTitle() {
     `${INNINGS}イニング制 — あなたはホームチーム`,
     "表＝あなたの投球（守備） / 裏＝あなたの打撃（攻撃）",
     "",
-    "【投球】1〜4で球種、← → ↑ ↓ で狙い、スペースで投球",
-    "【打撃】← → ↑ ↓ でミートカーソル、スペースでスイング",
+    "【投球】球種ボタン/1〜4、画面なぞりで狙い、大ボタンで投球",
+    "【打撃】画面なぞりでミート、大ボタン/スペースでスイング",
   ];
   let y = 330;
   for (const l of lines) { ctx.fillText(l, W / 2, y); y += 30; }
 
   ctx.fillStyle = "#ffd23f";
   ctx.font = "bold 24px sans-serif";
-  ctx.fillText("▶ スペースキーで開始 ◀", W / 2, 520);
+  ctx.fillText("▶ スペース / タップで開始 ◀", W / 2, 520);
   ctx.textAlign = "left";
 }
 
@@ -1125,6 +1178,32 @@ function updateHUD() {
 
   // プロンプト
   document.getElementById("prompt").textContent = game.msg;
+
+  // タッチ操作ボタンの表示更新
+  updateTouchUI();
+}
+
+function updateTouchUI() {
+  const ab = document.getElementById("action-btn");
+  if (ab) {
+    let label = "—";
+    if (game.phase === "title") label = "開始";
+    else if (game.phase === "change") label = "次へ";
+    else if (game.phase === "gameover") label = "再戦";
+    else if (game.phase === "pitch_select" && playerPitching()) label = "投球";
+    else if (game.phase === "pitch" && playerBatting()) label = "スイング";
+    else if (game.phase === "pitch_select" && playerBatting()) label = "構え";
+    ab.textContent = label;
+  }
+
+  const pb = document.getElementById("pitch-buttons");
+  if (pb) {
+    const show = game.phase === "pitch_select" && playerPitching();
+    pb.style.visibility = show ? "visible" : "hidden";
+    for (const btn of pb.querySelectorAll("[data-pitch]")) {
+      btn.classList.toggle("sel", PITCH_KEYS[btn.dataset.pitch] === pitch.type);
+    }
+  }
 }
 
 function setDots(id, count, max, cls) {

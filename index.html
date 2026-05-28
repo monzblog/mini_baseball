@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ミニ野球 - パワプロ風ベースボール</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -43,11 +43,22 @@
     <canvas id="game" width="800" height="600"></canvas>
 
     <footer class="controls">
-      <div id="prompt" class="prompt">スペースキーで開始</div>
+      <div id="prompt" class="prompt">スペース / タップで開始</div>
+
+      <div class="touch-controls">
+        <div class="pitch-buttons" id="pitch-buttons">
+          <button class="pbtn" data-pitch="1">ストレート</button>
+          <button class="pbtn" data-pitch="2">カーブ</button>
+          <button class="pbtn" data-pitch="3">スライダー</button>
+          <button class="pbtn" data-pitch="4">フォーク</button>
+        </div>
+        <button id="action-btn" class="action-btn">開始</button>
+      </div>
+
       <div class="keyhint">
-        <span>← → ↑ ↓ : カーソル移動</span>
-        <span>1〜4 : 球種選択（投球時）</span>
-        <span>スペース : 投球 / スイング</span>
+        <span>画面をなぞる / ← → ↑ ↓ : カーソル移動</span>
+        <span>球種ボタン / 1〜4 : 球種選択（投球時）</span>
+        <span>大ボタン / スペース : 投球・スイング</span>
       </div>
     </footer>
   </div>

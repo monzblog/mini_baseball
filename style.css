@@ -170,3 +170,84 @@ html, body {
   font-size: 12px;
   color: #9fb8d0;
 }
+
+/* ---------------------- タッチ操作 UI ---------------------- */
+html { -webkit-text-size-adjust: 100%; }
+body { overscroll-behavior: none; }
+
+button {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.touch-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.pitch-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.pbtn {
+  background: var(--panel-light);
+  color: var(--text);
+  border: 2px solid #2c5480;
+  border-radius: 22px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: bold;
+}
+.pbtn.sel {
+  background: var(--accent);
+  color: #11243a;
+  border-color: var(--accent);
+}
+.pbtn:active { transform: scale(0.95); }
+
+.action-btn {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: none;
+  background: radial-gradient(circle at 35% 30%, #ff6b5e, var(--red));
+  color: #fff;
+  font-size: 18px;
+  font-weight: bold;
+  box-shadow: 0 5px 0 #a82a22, 0 6px 12px rgba(0,0,0,0.4);
+}
+.action-btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #a82a22, 0 2px 6px rgba(0,0,0,0.4);
+}
+
+/* ---------------------- スマホ向け調整 ---------------------- */
+@media (max-width: 600px) {
+  #app { padding: 6px; gap: 6px; }
+  .hud { gap: 6px; }
+  .hud-score { padding: 6px; }
+  #scoreboard { font-size: 11px; }
+  #scoreboard th, #scoreboard td { padding: 2px 4px; min-width: 16px; }
+  #scoreboard .team-cell { min-width: 48px; font-size: 11px; }
+  .hud-count { min-width: 120px; padding: 6px 8px; }
+  .count-line { font-size: 12px; }
+  .bases-mini { width: 48px; height: 48px; }
+  .bases-mini .base { width: 13px; height: 13px; }
+  .bases-mini .base1 { top: 17px; }
+  .bases-mini .base2 { left: 17px; }
+  .bases-mini .base3 { top: 17px; }
+  .bases-mini .home { left: 17px; }
+  .prompt { font-size: 14px; padding: 7px 12px; }
+  .keyhint { display: none; }
+  .pbtn { padding: 9px 12px; font-size: 13px; }
+  .action-btn { width: 84px; height: 84px; font-size: 16px; }
+}
