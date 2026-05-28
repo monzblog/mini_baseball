@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ミニ野球 - パワプロ風ベースボール</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="hud">
+      <div class="hud-score">
+        <table id="scoreboard">
+          <thead>
+            <tr id="inning-row"><th class="team-cell"></th></tr>
+          </thead>
+          <tbody>
+            <tr id="away-row"><td class="team-cell">ビジター</td></tr>
+            <tr id="home-row"><td class="team-cell">ホーム</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="hud-count">
+        <div class="count-line"><span class="count-label">回</span><span id="inning-label">1回 表</span></div>
+        <div class="count-line">
+          <span class="count-label">B</span><span id="balls" class="dots"></span>
+        </div>
+        <div class="count-line">
+          <span class="count-label">S</span><span id="strikes" class="dots"></span>
+        </div>
+        <div class="count-line">
+          <span class="count-label">O</span><span id="outs" class="dots"></span>
+        </div>
+        <div class="bases-mini">
+          <span class="base base2" id="mini-2"></span>
+          <span class="base base3" id="mini-3"></span>
+          <span class="base base1" id="mini-1"></span>
+          <span class="base home"></span>
+        </div>
+      </div>
+    </header>
+
+    <canvas id="game" width="800" height="600"></canvas>
+
+    <footer class="controls">
+      <div id="prompt" class="prompt">スペースキーで開始</div>
+      <div class="keyhint">
+        <span>← → ↑ ↓ : カーソル移動</span>
+        <span>1〜4 : 球種選択（投球時）</span>
+        <span>スペース : 投球 / スイング</span>
+      </div>
+    </footer>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
